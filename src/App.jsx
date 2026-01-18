@@ -2,7 +2,52 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Brain, FileText, Download, Loader2, AlertCircle, X, Play, Table, Copy, Sun, Moon, CheckCircle, TrendingUp, BarChart3, PieChart, Clock, Bell, Mail, Zap } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart as RePieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-export default function JanusEnhanced() {
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('React Error Boundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 p-6 flex items-center justify-center">
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-8 max-w-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-8 h-8 text-red-400" />
+              <h1 className="text-2xl font-bold text-red-400">Application Error</h1>
+            </div>
+            <p className="text-red-300 mb-4">
+              Something went wrong. Please refresh the page to try again.
+            </p>
+            <pre className="bg-slate-800 p-4 rounded text-sm text-red-200 overflow-auto">
+              {this.state.error?.toString()}
+            </pre>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function JanusEnhanced() {
   const [sheetUrls, setSheetUrls] = useState([]);
   const [currentUrl, setCurrentUrl] = useState('');
   const [localFiles, setLocalFiles] = useState([]);
@@ -441,9 +486,12 @@ export default function JanusEnhanced() {
         setError(`Unexpected response format. Expected content array but got: ${JSON.stringify(data).slice(0, 200)}`);
       }
     } catch (err) {
-      setError(err.message);
+      console.error('processSheets error:', err);
+      const errorMessage = err?.message || err?.toString() || 'An unexpected error occurred';
+      setError(errorMessage);
     } finally {
       setProcessing(false);
+      setProgressText('');
       setTimeout(() => setProgress(0), 2000);
     }
   };
@@ -1083,5 +1131,14 @@ export default function JanusEnhanced() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrap with Error Boundary and export
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <JanusEnhanced />
+    </ErrorBoundary>
   );
 }
