@@ -59,9 +59,32 @@ function JanusEnhanced() {
   const [currentRule, setCurrentRule] = useState({ name: '', prompt: '' });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setErrorRaw] = useState('');
+  const [success, setSuccessRaw] = useState('');
   const [activeTab, setActiveTab] = useState('sheets');
+
+  // Safe setters that convert objects to strings
+  const setError = (err) => {
+    if (!err) {
+      setErrorRaw('');
+    } else if (typeof err === 'string') {
+      setErrorRaw(err);
+    } else if (err.message) {
+      setErrorRaw(err.message);
+    } else {
+      setErrorRaw(String(err));
+    }
+  };
+
+  const setSuccess = (msg) => {
+    if (!msg) {
+      setSuccessRaw('');
+    } else if (typeof msg === 'string') {
+      setSuccessRaw(msg);
+    } else {
+      setSuccessRaw(String(msg));
+    }
+  };
   const [darkMode, setDarkMode] = useState(true);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
@@ -563,7 +586,7 @@ function JanusEnhanced() {
           {success && (
             <div className="mb-6 bg-green-900/20 border border-green-500/30 rounded-lg p-3 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              <p className="text-sm text-green-300">{success}</p>
+              <p className="text-sm text-green-300">{typeof success === 'string' ? success : JSON.stringify(success)}</p>
             </div>
           )}
 
@@ -1041,7 +1064,7 @@ function JanusEnhanced() {
           {error && (
             <div className="mt-6 bg-red-900/20 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-300">{error}</p>
+              <p className="text-sm text-red-300">{typeof error === 'string' ? error : JSON.stringify(error)}</p>
             </div>
           )}
 
