@@ -171,7 +171,21 @@ export default function JanusEnhanced() {
       setError('Please provide automation name and condition');
       return;
     }
-    setAutomations([...automations, { ...currentAutomation, id: Date.now(), active: true }]);
+
+    if (editingAutomation) {
+      // Update existing automation
+      setAutomations(automations.map(a =>
+        a.id === editingAutomation.id
+          ? { ...currentAutomation, id: editingAutomation.id, active: a.active }
+          : a
+      ));
+      setSuccess('Automation updated successfully!');
+    } else {
+      // Create new automation
+      setAutomations([...automations, { ...currentAutomation, id: Date.now(), active: true }]);
+      setSuccess('Automation created! Note: Deploy to activate scheduled runs.');
+    }
+
     setCurrentAutomation({
       name: '',
       schedule: 'daily',
@@ -179,10 +193,10 @@ export default function JanusEnhanced() {
       condition: '',
       threshold: '',
       notifyEmail: '',
-      notifyMethod: 'email'
+      notifyMethod: 'browser'
     });
+    setEditingAutomation(null);
     setShowAutomationBuilder(false);
-    setSuccess('Automation created! Note: Deploy to activate scheduled runs.');
     setTimeout(() => setSuccess(''), 4000);
   };
 
@@ -229,18 +243,46 @@ export default function JanusEnhanced() {
       setError('Please fill in automation details before testing');
       return;
     }
-    
+
     const title = `🧪 Test: ${currentAutomation.name}`;
     const body = `This is a test notification. Condition: ${currentAutomation.condition}`;
-    
+
     if (currentAutomation.notifyMethod === 'browser') {
       sendBrowserNotification(title, body);
       setSuccess('Test notification sent! Check your desktop.');
     } else {
       setSuccess(`Test would send via ${currentAutomation.notifyMethod}`);
     }
-    
+
     setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const editAutomation = (automation) => {
+    setEditingAutomation(automation);
+    setCurrentAutomation({
+      name: automation.name,
+      schedule: automation.schedule,
+      time: automation.time,
+      condition: automation.condition,
+      threshold: automation.threshold || '',
+      notifyEmail: automation.notifyEmail || '',
+      notifyMethod: automation.notifyMethod
+    });
+    setShowAutomationBuilder(true);
+  };
+
+  const cancelEdit = () => {
+    setEditingAutomation(null);
+    setCurrentAutomation({
+      name: '',
+      schedule: 'daily',
+      time: '09:00',
+      condition: '',
+      threshold: '',
+      notifyEmail: '',
+      notifyMethod: 'browser'
+    });
+    setShowAutomationBuilder(false);
   };
 
   const sendBrowserNotification = (title, body) => {
