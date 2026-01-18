@@ -464,11 +464,15 @@ function JanusEnhanced() {
 
       let response;
       try {
+        // Available models (try in this order if one fails):
+        // - 'claude-3-opus-20240229' (most capable, requires higher-tier API key)
+        // - 'claude-3-sonnet-20240229' (balanced)
+        // - 'claude-3-haiku-20240307' (fastest, most accessible)
         response = await fetch('/api/process', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'claude-3-opus-20240229',
+            model: 'claude-3-haiku-20240307',
             max_tokens: 4096,
             messages: [{
               role: 'user',
@@ -490,7 +494,15 @@ function JanusEnhanced() {
       // Handle API errors
       if (!response.ok) {
         console.error('API Error Response:', data);
-        const errorMessage = data.error || data.message || `API error: ${response.status}`;
+        // Extract error message from Anthropic API response structure
+        let errorMessage = `API error: ${response.status}`;
+        if (data.error && typeof data.error === 'object') {
+          errorMessage = data.error.message || JSON.stringify(data.error);
+        } else if (data.error) {
+          errorMessage = data.error;
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
         setError(errorMessage);
         return;
       }
