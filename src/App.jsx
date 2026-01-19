@@ -358,8 +358,19 @@ function JanusEnhanced() {
   };
 
   const sendBrowserNotification = (title, body) => {
-    if ('Notification' in window) {
-      if (Notification.permission === 'granted') {
+    console.log('sendBrowserNotification called:', { title, body });
+
+    if (!('Notification' in window)) {
+      console.error('Browser does not support notifications');
+      setError('Browser notifications are not supported in your browser');
+      return;
+    }
+
+    console.log('Notification permission status:', Notification.permission);
+
+    if (Notification.permission === 'granted') {
+      console.log('Sending notification...');
+      try {
         new Notification(title, {
           body: body,
           icon: '🔔',
@@ -367,36 +378,74 @@ function JanusEnhanced() {
           tag: 'janus-notification',
           requireInteraction: false
         });
-      } else if (Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification(title, { body: body, icon: '🔔' });
-          }
-        });
+        console.log('Notification sent successfully!');
+      } catch (err) {
+        console.error('Failed to send notification:', err);
+        setError(`Failed to send notification: ${err.message}`);
       }
+    } else if (Notification.permission === 'denied') {
+      console.warn('Notifications are blocked. Please enable them in your browser settings.');
+      setError('Notifications are blocked. Check your browser settings to enable them for this site.');
+    } else {
+      console.log('Requesting notification permission...');
+      Notification.requestPermission().then(permission => {
+        console.log('Permission response:', permission);
+        if (permission === 'granted') {
+          new Notification(title, { body: body, icon: '🔔' });
+          console.log('Notification sent after permission granted!');
+        } else {
+          console.warn('Notification permission denied by user');
+        }
+      });
     }
   };
 
   const checkAutomations = (resultText) => {
+    console.log('Checking automations. Active automations:', automations.filter(a => a.active).length);
+
+    if (automations.length === 0) {
+      console.log('No automations configured');
+      return;
+    }
+
+    let triggeredCount = 0;
+
     automations.forEach(auto => {
-      if (!auto.active) return;
+      if (!auto.active) {
+        console.log(`Skipping inactive automation: ${auto.name}`);
+        return;
+      }
+
+      console.log(`Checking automation: "${auto.name}" for condition: "${auto.condition}"`);
 
       // Simple keyword matching for conditions
       const conditionMet = resultText.toLowerCase().includes(auto.condition.toLowerCase());
-      
+
       // Check if threshold is mentioned or condition appears to be met
       if (conditionMet || (auto.threshold && resultText.includes(auto.threshold))) {
+        console.log(`✅ Condition MET for: ${auto.name}`);
+        triggeredCount++;
+
         const title = `🚨 Janus Alert: ${auto.name}`;
         const body = `Condition detected: ${auto.condition}${auto.threshold ? ` (${auto.threshold})` : ''}`;
-        
+
         if (auto.notifyMethod === 'browser' || auto.notifyMethod === 'email') {
+          console.log('Sending browser notification...');
           sendBrowserNotification(title, body);
         }
-        
+
         setSuccess(`Alert triggered: ${auto.name}`);
         setTimeout(() => setSuccess(''), 3000);
+      } else {
+        console.log(`❌ Condition NOT met for: ${auto.name}. "${auto.condition}" not found in results.`);
       }
     });
+
+    if (triggeredCount === 0) {
+      console.log('No automation conditions were met in this run.');
+    } else {
+      console.log(`${triggeredCount} automation(s) triggered!`);
+    }
   };
 
   const extractKpiData = (resultText) => {
@@ -1013,12 +1062,13 @@ function JanusEnhanced() {
 
               {automations.length > 0 && (
                 <div className="mt-4 bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
-                  <p className="text-xs text-blue-300 mb-1">💡 <strong>How Browser Notifications Work:</strong></p>
+                  <p className="text-xs text-blue-300 mb-1">💡 <strong>How Automations Work:</strong></p>
                   <ul className="text-xs text-blue-300 space-y-1">
-                    <li>• Notifications appear when Janus processes data and conditions are met</li>
-                    <li>• Works instantly - no setup required</li>
-                    <li>• Keep this tab open to receive alerts</li>
-                    <li>• For scheduled runs, deploy to Vercel for 24/7 monitoring</li>
+                    <li>• Automations check conditions when you click "Run Janus"</li>
+                    <li>• If your condition keyword appears in results, you'll get a notification</li>
+                    <li>• Check browser console (F12) to see detailed automation logs</li>
+                    <li>• Make sure browser notifications are enabled for this site</li>
+                    <li>• Note: Schedule/time fields are stored but not currently used for automatic runs</li>
                   </ul>
                 </div>
               )}
