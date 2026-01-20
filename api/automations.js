@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   // CORS headers
@@ -11,42 +11,44 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Check if Postgres is configured
-  if (!process.env.POSTGRES_URL && !process.env.POSTGRES_URL_NON_POOLING) {
-    console.error('Postgres environment variables not set');
+  // Check if Supabase is configured
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Supabase environment variables not set');
+    console.log('Available env vars:', Object.keys(process.env).filter(k => k.includes('SUPABASE')));
     return res.status(500).json({
-      error: 'Database not configured. Please ensure Supabase is connected in Vercel and the deployment has completed.',
-      hint: 'Go to Vercel → Storage → Verify connection → Redeploy if needed'
+      error: 'Database not configured. Supabase connection details missing.',
+      hint: 'Check Vercel environment variables for SUPABASE_URL and SUPABASE keys'
     });
   }
 
   try {
     console.log('Automations API called:', req.method);
+    console.log('Connecting to Supabase...');
 
-    // Ensure table exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS automations (
-        id SERIAL PRIMARY KEY,
-        automation_id BIGINT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        schedule TEXT NOT NULL,
-        time TEXT NOT NULL,
-        condition TEXT NOT NULL,
-        threshold TEXT,
-        notify_email TEXT,
-        notify_method TEXT NOT NULL,
-        active BOOLEAN NOT NULL DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // GET - Retrieve all automations
     if (req.method === 'GET') {
-      const { rows } = await sql`SELECT * FROM automations ORDER BY created_at DESC`;
+      const { data, error } = await supabase
+        .from('automations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        // If table doesn't exist, return empty array
+        if (error.code === '42P01') {
+          console.log('Automations table does not exist yet');
+          return res.status(200).json({ automations: [] });
+        }
+        throw error;
+      }
 
       // Convert DB format to app format
-      const automations = rows.map(row => ({
+      const automations = (data || []).map(row => ({
         id: row.automation_id,
         name: row.name,
         schedule: row.schedule,
@@ -70,20 +72,39 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'automations must be an array' });
       }
 
-      // Clear existing automations and insert new ones
-      await sql`DELETE FROM automations`;
+      // Delete all existing automations
+      const { error: deleteError } = await supabase
+        .from('automations')
+        .delete()
+        .neq('id', 0); // Delete all rows
 
-      for (const auto of automations) {
-        await sql`
-          INSERT INTO automations (
-            automation_id, name, schedule, time, condition,
-            threshold, notify_email, notify_method, active
-          ) VALUES (
-            ${auto.id}, ${auto.name}, ${auto.schedule}, ${auto.time},
-            ${auto.condition}, ${auto.threshold || null},
-            ${auto.notifyEmail || null}, ${auto.notifyMethod}, ${auto.active}
-          )
-        `;
+      if (deleteError && deleteError.code !== '42P01') {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
+
+      // Insert new automations
+      if (automations.length > 0) {
+        const records = automations.map(auto => ({
+          automation_id: auto.id,
+          name: auto.name,
+          schedule: auto.schedule,
+          time: auto.time,
+          condition: auto.condition,
+          threshold: auto.threshold || null,
+          notify_email: auto.notifyEmail || null,
+          notify_method: auto.notifyMethod,
+          active: auto.active
+        }));
+
+        const { error: insertError } = await supabase
+          .from('automations')
+          .insert(records);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
       }
 
       console.log('Saved automations:', automations.length);
@@ -92,7 +113,15 @@ export default async function handler(req, res) {
 
     // DELETE - Clear all automations
     if (req.method === 'DELETE') {
-      await sql`DELETE FROM automations`;
+      const { error } = await supabase
+        .from('automations')
+        .delete()
+        .neq('id', 0); // Delete all rows
+
+      if (error && error.code !== '42P01') {
+        throw error;
+      }
+
       console.log('Deleted all automations');
       return res.status(200).json({ success: true });
     }
@@ -103,7 +132,8 @@ export default async function handler(req, res) {
     console.error('Automations API error:', err);
     return res.status(500).json({
       error: 'Server error: ' + err.message,
-      details: err.toString()
+      details: err.toString(),
+      code: err.code
     });
   }
 }
