@@ -1,8 +1,41 @@
 import { sql } from '@vercel/postgres';
 import crypto from 'crypto';
 
-// Verify and decode token (same logic as in auth.js)
-function verifyToken(token) {
+// Hash password using crypto
+export function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return { salt, hash };
+}
+
+// Verify password
+export function verifyPassword(password, salt, hash) {
+  const hashVerify = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return hash === hashVerify;
+}
+
+// Generate JWT-like token with user data encoded
+export function generateToken(userId, email) {
+  const payload = {
+    userId,
+    email,
+    iat: Date.now()
+  };
+  const payloadStr = JSON.stringify(payload);
+  const payloadB64 = Buffer.from(payloadStr).toString('base64');
+
+  // Sign with secret
+  const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64');
+
+  return `${payloadB64}.${signature}`;
+}
+
+// Verify and decode token
+export function verifyToken(token) {
   if (!token) return null;
 
   try {
@@ -27,6 +60,28 @@ function verifyToken(token) {
     console.error('Token verification failed:', err);
     return null;
   }
+}
+
+// Ensure users table exists
+export async function ensureUsersTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      name TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+}
+
+// CORS headers helper
+export function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 // Verify authentication token and return user info
