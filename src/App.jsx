@@ -113,14 +113,6 @@ function JanusEnhanced() {
   useEffect(() => {
     loadAutomations();
     loadUserData();
-  }, []);
-
-  // Load recent sheets from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('recentSheets');
-    if (saved) {
-      setRecentSheets(JSON.parse(saved));
-    }
 
     // Request notification permission on load
     if ('Notification' in window && Notification.permission === 'default') {
@@ -213,6 +205,11 @@ function JanusEnhanced() {
     try {
       console.log('Loading user data from backend...');
       const response = await fetch('/api/user-data');
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.recentFiles && Array.isArray(data.recentFiles)) {
@@ -227,31 +224,36 @@ function JanusEnhanced() {
         setRecentSheets(data.recentLinks.map(link => link.url));
         localStorage.setItem('janus:recentLinks', JSON.stringify(data.recentLinks));
         localStorage.setItem('recentSheets', JSON.stringify(data.recentLinks.map(link => link.url)));
-      } else {
-        // Fallback to localStorage if backend fails
-        const cachedFiles = localStorage.getItem('janus:recentFiles');
-        const cachedLinks = localStorage.getItem('janus:recentLinks');
-        if (cachedFiles) {
-          console.log('Loading recent files from localStorage fallback');
-          setRecentFiles(JSON.parse(cachedFiles));
-        }
-        if (cachedLinks) {
-          console.log('Loading recent links from localStorage fallback');
-          setRecentLinks(JSON.parse(cachedLinks));
-        }
       }
     } catch (err) {
       console.error('Failed to load user data from backend:', err);
       // Fallback to localStorage
       const cachedFiles = localStorage.getItem('janus:recentFiles');
       const cachedLinks = localStorage.getItem('janus:recentLinks');
+      const oldSheets = localStorage.getItem('recentSheets');
+
       if (cachedFiles) {
         console.log('Loading recent files from localStorage after error');
         setRecentFiles(JSON.parse(cachedFiles));
       }
+
       if (cachedLinks) {
         console.log('Loading recent links from localStorage after error');
-        setRecentLinks(JSON.parse(cachedLinks));
+        const links = JSON.parse(cachedLinks);
+        setRecentLinks(links);
+        setRecentSheets(links.map(link => link.url));
+      } else if (oldSheets) {
+        // Migrate old recentSheets format
+        console.log('Migrating old recentSheets data');
+        const sheets = JSON.parse(oldSheets);
+        setRecentSheets(sheets);
+        const migratedLinks = sheets.map(url => ({
+          url,
+          title: 'Google Sheet',
+          timestamp: new Date().toISOString()
+        }));
+        setRecentLinks(migratedLinks);
+        localStorage.setItem('janus:recentLinks', JSON.stringify(migratedLinks));
       }
     }
   };
